@@ -19,13 +19,22 @@ import asyncio
 # from llama_index.core.agent.workflow.workflow_events import Event, StartEvent
 from llama_index.core.prompts import RichPromptTemplate
 from llama_index.core.tools import FunctionTool
+import sys
 
 dotenv.load_dotenv()
 # Set logging level for llama_index to see if it helps reveal issues
 logging.getLogger("llama_index").setLevel(logging.DEBUG)
-github_token = github.Auth.Token(os.getenv('GITHUB_TOKEN'))
+
+
+github_token = sys.argv[1]
+repo_url = sys.argv[2]
+pr_number = sys.argv[3]
+openai_api_key = sys.argv[4]
+openai_base_url = sys.argv[5]
+
+# github_token = github.Auth.Token(os.getenv('GITHUB_TOKEN'))
 git = Github(auth=github_token)
-repo_url = os.getenv("REPO_URL")
+# repo_url = os.getenv("REPO_URL")
 repo_name = repo_url.split('/')[-1].replace('.git', '')
 username = repo_url.split('/')[-2]
 full_repo_name = f"{username}/{repo_name}"
@@ -124,8 +133,8 @@ post_review_to_pr_tool = FunctionTool.from_defaults(
 
 llm = OpenAILike(
     model=os.getenv("OPENAI_MODEL"),
-    api_key=os.getenv("OPENAI_API_KEY"),
-    api_base=os.getenv("OPENAI_BASE_URL"),
+    api_key=openai_api_key,
+    api_base=openai_base_url,
     is_function_calling_model=True,
     timeout=120
 )
