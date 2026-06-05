@@ -79,18 +79,20 @@ def get_file_content(file_path):
     return file_content.decoded_content.decode()
 
 async def add_review_to_state(ctx: Context, review):
-    current_state = await ctx.get("state")
+    current_state = await ctx.store.get("state")
     current_state["final_review"] = review
     debug("ADDING REVIEW TO STATE")
     debug(review[:300] if review else "<EMPTY>")
-    await ctx.set("state", current_state)
+    await ctx.store.set("state", current_state)
 
 async def add_comment_to_state(ctx: Context, draft_comment):
-    current_state = await ctx.get("state")
+    debug(type(ctx))
+    debug(dir(ctx))
+    current_state = await ctx.store.get("state")
     current_state["draft_comment"] = draft_comment
     debug("ADDING COMMENT TO STATE")
     debug(draft_comment[:300] if draft_comment else "<EMPTY>")
-    await ctx.set("state", current_state)
+    await ctx.store.set("state", current_state)
 
 def post_review_to_pr(pr_number: int, comment: str):
     debug("POSTING REVIEW")
@@ -156,9 +158,9 @@ llm = OpenAILike(
 )
 
 async def mark_context_as_gathered(ctx: Context):
-    current_state = await ctx.get("state")
+    current_state = await ctx.store.get("state")
     current_state["context_gathered"] = True
-    await ctx.set("state", current_state)
+    await ctx.store.set("state", current_state)
 
 mark_context_as_gathered_tool = FunctionTool.from_defaults(
     mark_context_as_gathered,
@@ -173,12 +175,12 @@ async def main():
         instruction=
         """You are the CommentorAgent.
 Your mission is to draft a review comment.
-You MUST call add_comment_to_state.
+You MUST call add_comment_to.
 You MUST handoff to ReviewAndPostingAgent.
 You MUST NEVER provide an Answer.
 STRICT RULES:
 1. You MUST call 'get_file_content' with 'file_path="README.md"'.
-2. You MUST call 'add_comment_to_state' with a detailed markdown review based on the PR context.
+2. You MUST call 'add_comment_to' with a detailed markdown review based on the PR context.
 3. You MUST call 'handoff' to 'ReviewAndPostingAgent'.
 Do NOT provide an Answer.
 """,
