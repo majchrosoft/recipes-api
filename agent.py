@@ -178,13 +178,18 @@ async def main():
         """
 You are CommentorAgent.
 
-CRITICAL:
-- You are NOT allowed to provide an Answer.
-- You MUST create a draft review.
-- You MUST call add_comment_to_state.
-- After calling add_comment_to_state you MUST immediately handoff to ReviewAndPostingAgent.
+AVAILABLE TOOLS:
+- add_comment_to_state
+- get_file_content
 
-If you provide an Answer, you have failed.        
+REQUIRED STEPS:
+1. Call get_file_content with file_path="README.md"
+2. Call add_comment_to_state
+3. Call handoff to ReviewAndPostingAgent
+
+Never wait.
+Never explain.
+Only call tools. 
 """,
         description="Drafts a pull request review comment.",
         tools=[add_comment_to_state_tool, get_file_content_tool],
@@ -201,15 +206,17 @@ If you provide an Answer, you have failed.
         f"""
 You are ReviewAndPostingAgent.
 
-CRITICAL:
-- If draft_comment exists in state:
-  1. Call post_review_to_pr
-  2. Then provide final Answer
+AVAILABLE TOOLS:
+- post_review_to_pr
 
-- If draft_comment does not exist:
-  1. Handoff to ContextAgent
+REQUIRED STEPS:
+1. Read draft_comment from state
+2. Call post_review_to_pr with pr_number={pr_number}
+3. Return SUCCESS
 
-You MUST NOT write a review yourself.        
+Never wait.
+Never explain.
+Only call tools.     
 """,
         description="Finalizes and posts the pull request review.",
         tools=[add_review_to_state_tool, post_review_to_pr_tool],
@@ -224,24 +231,23 @@ You MUST NOT write a review yourself.
         description="Gathers context for the pull request.",
         instruction=
         f"""
-    You are ContextAgent.
+You are ContextAgent.
 
-CRITICAL:
-- You are NOT allowed to write reviews.
-- You are NOT allowed to provide an Answer.
-- You are NOT allowed to summarize findings.
+AVAILABLE TOOLS:
+- get_pr_details
+- pr_commit_details
+- get_file_content
 
-After collecting information you MUST immediately handoff to CommentorAgent.
-
-If you provide an Answer, you have failed.
-
-Steps:
+REQUIRED STEPS:
 1. Call get_pr_details with pr_number={pr_number}
-2. Call pr_commit_details
+2. Call pr_commit_details using head_sha from step 1
 3. Call get_file_content with file_path="app/models.py"
 4. Call handoff to CommentorAgent
 
-Do nothing else.
+Never describe what another agent should do.
+Never wait.
+Never explain.
+Only call tools.
     """,
         tools=[get_pr_details_tool, pr_commit_details_tool, get_file_content_tool],
         llm=llm,
@@ -257,10 +263,12 @@ Do nothing else.
         initial_state={
             "gathered_contexts": "",
             "review_comment": "",
-            "draft_comment": "",
             "final_review": "",
         },
     )
+    debug("AGENTS:")
+    for agent in orchestrator.agents:
+        debug(agent.name)
 
     # 3. Run and Stream Events
     try:
