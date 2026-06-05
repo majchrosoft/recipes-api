@@ -23,6 +23,12 @@ import sys
 import github.Auth
 
 dotenv.load_dotenv()
+
+DEBUG = os.getenv("DEBUG")
+
+def debug(*args):
+    if DEBUG:
+        print("[DEBUG]", *args)
 # Set logging level for llama_index to see if it helps reveal issues
 logging.getLogger("llama_index").setLevel(logging.DEBUG)
 
@@ -83,9 +89,14 @@ async def add_comment_to_state(ctx: Context, draft_comment):
     await ctx.set("state", current_state)
 
 def post_review_to_pr(pr_number: int, comment: str):
+    debug("POSTING REVIEW")
+    debug("PR =", pr_number)
+    debug("COMMENT =", comment[:500] if comment else "<EMPTY>")
     pull_request = repo.get_pull(pr_number)
     try:
         pull_request.create_review(body=comment, event="COMMENT")
+        debug("REVIEW CREATED")
+        debug("REVIEW ID =", getattr(result, "id", None))
     except Exception as e:
         if "one pending review" in str(e):
             # Try to find the pending review and submit it
@@ -173,11 +184,11 @@ Do NOT provide an Answer.
         llm=llm,
         name="ReviewAndPostingAgent",
         instruction=
-        """You are the ReviewAndPostingAgent.
+        f"""You are the ReviewAndPostingAgent.
 Your mission is to post the review to GitHub.
 STRICT RULES:
 1. If 'draft_comment' is NOT in state, you MUST call 'handoff' to 'ContextAgent'.
-2. If 'draft_comment' IS in state, you MUST call 'post_review_to_pr' with pr_number=1 and the drafted comment.
+2. If 'draft_comment' IS in state, you MUST call 'post_review_to_pr' with pr_number=#{pr_number} and the drafted comment.
 3. ONLY AFTER 'post_review_to_pr' returns, you MUST provide a final 'Answer' starting with "SUCCESS: Review posted to PR #1".
 """,
         description="Finalizes and posts the pull request review.",
@@ -189,10 +200,10 @@ STRICT RULES:
         name="ContextAgent",
         description="Gathers context for the pull request.",
         instruction=
-        """You are the ContextAgent.
+        f"""You are the ContextAgent.
 Your mission is to gather context for PR #1.
 STRICT RULES:
-1. You MUST call 'get_pr_details' with pr_number=1.
+1. You MUST call 'get_pr_details' with pr_number={pr_number}.
 2. You MUST call 'pr_commit_details' with the head_sha from the output of get_pr_details.
 3. You MUST call 'get_file_content' with file_path="app/models.py".
 4. You MUST call 'handoff' to 'CommentorAgent'.
