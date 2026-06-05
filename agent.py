@@ -20,13 +20,14 @@ import asyncio
 from llama_index.core.prompts import RichPromptTemplate
 from llama_index.core.tools import FunctionTool
 import sys
+import github.Auth
 
 dotenv.load_dotenv()
 # Set logging level for llama_index to see if it helps reveal issues
 logging.getLogger("llama_index").setLevel(logging.DEBUG)
 
-
-github_token = sys.argv[1]
+github_token = github.Auth.Token(sys.argv[1])
+git = Github(auth=github_token)
 repo_url = sys.argv[2]
 pr_number = sys.argv[3]
 openai_api_key = sys.argv[4]
