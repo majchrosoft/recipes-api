@@ -70,7 +70,7 @@ def pr_commit_details(commit_sha):
             "additions": f.additions,
             "deletions": f.deletions,
             "changes": f.changes,
-            "patch": f.patch,
+            "patch": f.patch[:2000] if f.patch else "",
         })
     return changed_files
 
@@ -156,7 +156,7 @@ llm = OpenAILike(
     api_key=openai_api_key,
     api_base=openai_base_url,
     is_function_calling_model=True,
-    timeout=120
+    timeout=20
 )
 
 async def mark_context_as_gathered(ctx: Context):
@@ -295,7 +295,10 @@ Only call tools.
         response = await handler
         debug("FINAL RESPONSE")
         debug(response)
+        print("STREAM FINISHED")
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"Error during workflow execution: {e}")
 
 if __name__ == "__main__":
