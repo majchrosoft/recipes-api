@@ -24,7 +24,7 @@ import github.Auth
 
 dotenv.load_dotenv()
 
-DEBUG = os.getenv("DEBUG")
+DEBUG = os.getenv("DEBUG", "0") == "1"
 
 def debug(*args):
     if DEBUG:
@@ -81,11 +81,15 @@ def get_file_content(file_path):
 async def add_review_to_state(ctx: Context, review):
     current_state = await ctx.get("state")
     current_state["final_review"] = review
+    debug("ADDING REVIEW TO STATE")
+    debug(review[:300] if review else "<EMPTY>")
     await ctx.set("state", current_state)
 
 async def add_comment_to_state(ctx: Context, draft_comment):
     current_state = await ctx.get("state")
     current_state["draft_comment"] = draft_comment
+    debug("ADDING COMMENT TO STATE")
+    debug(draft_comment[:300] if draft_comment else "<EMPTY>")
     await ctx.set("state", current_state)
 
 def post_review_to_pr(pr_number: int, comment: str):
@@ -94,7 +98,7 @@ def post_review_to_pr(pr_number: int, comment: str):
     debug("COMMENT =", comment[:500] if comment else "<EMPTY>")
     pull_request = repo.get_pull(pr_number)
     try:
-        pull_request.create_review(body=comment, event="COMMENT")
+        result = pull_request.create_review(body=comment, event="COMMENT")
         debug("REVIEW CREATED")
         debug("REVIEW ID =", getattr(result, "id", None))
     except Exception as e:
@@ -169,9 +173,12 @@ async def main():
         instruction=
         """You are the CommentorAgent.
 Your mission is to draft a review comment.
+You MUST call add_comment_to_state.
+You MUST handoff to ReviewAndPostingAgent.
+You MUST NEVER provide an Answer.
 STRICT RULES:
 1. You MUST call 'get_file_content' with 'file_path="README.md"'.
-2. You MUST call 'add_comment_to_state_tool' with a detailed markdown review based on the PR context.
+2. You MUST call 'add_comment_to_state' with a detailed markdown review based on the PR context.
 3. You MUST call 'handoff' to 'ReviewAndPostingAgent'.
 Do NOT provide an Answer.
 """,
@@ -179,6 +186,9 @@ Do NOT provide an Answer.
         tools=[add_comment_to_state_tool, get_file_content_tool],
         can_handoff_to=["ReviewAndPostingAgent"]
     )
+    debug("commenter_agent tools:")
+    for t in commenter_agent.tools:
+        debug(t.metadata.name)
 
     review_and_posting_agent = ReActAgent(
         llm=llm,
@@ -188,37 +198,54 @@ Do NOT provide an Answer.
 Your mission is to post the review to GitHub.
 STRICT RULES:
 1. If 'draft_comment' is NOT in state, you MUST call 'handoff' to 'ContextAgent'.
-2. If 'draft_comment' IS in state, you MUST call 'post_review_to_pr' with pr_number=#{pr_number} and the drafted comment.
+2. If 'draft_comment' IS in state, you MUST call 'post_review_to_pr' with pr_number={pr_number} and the drafted comment.
 3. ONLY AFTER 'post_review_to_pr' returns, you MUST provide a final 'Answer' starting with "SUCCESS: Review posted to PR #1".
 """,
         description="Finalizes and posts the pull request review.",
         tools=[add_review_to_state_tool, post_review_to_pr_tool],
         can_handoff_to = ["ContextAgent", "CommentorAgent"]
     )
+    debug("review_and_posting_agent tools:")
+    for t in review_and_posting_agent.tools:
+        debug(t.metadata.name)
 
     context_agent = ReActAgent(
         name="ContextAgent",
         description="Gathers context for the pull request.",
         instruction=
-        f"""You are the ContextAgent.
-Your mission is to gather context for PR #1.
-STRICT RULES:
-1. You MUST call 'get_pr_details' with pr_number={pr_number}.
-2. You MUST call 'pr_commit_details' with the head_sha from the output of get_pr_details.
-3. You MUST call 'get_file_content' with file_path="app/models.py".
-4. You MUST call 'handoff' to 'CommentorAgent'.
-Do NOT provide an Answer.
-""",
+        f"""
+    You are the ContextAgent.
+
+    NEVER provide an Answer.
+
+    NEVER write a review.
+
+    After gathering context you MUST immediately call handoff to CommentorAgent.
+
+    If you provide an Answer you have failed your task.
+
+    STRICT RULES:
+    1. You MUST call 'get_pr_details' with pr_number={pr_number}.
+    2. You MUST call 'pr_commit_details' with the head_sha from the output of get_pr_details.
+    3. You MUST call 'get_file_content' with file_path="app/models.py".
+    4. You MUST call 'handoff' to 'CommentorAgent'.
+    Do NOT provide an Answer.
+    """,
         tools=[get_pr_details_tool, pr_commit_details_tool, get_file_content_tool],
         llm=llm,
         can_handoff_to = ["CommentorAgent"]
     )
+    debug("context_agent tools:")
+    for t in context_agent.tools:
+        debug(t.metadata.name)
+
     orchestrator = AgentWorkflow(
         agents=[context_agent, commenter_agent, review_and_posting_agent],
         root_agent=review_and_posting_agent.name,
         initial_state={
             "gathered_contexts": "",
             "review_comment": "",
+            "draft_comment": "",
             "final_review": "",
         },
     )
@@ -245,6 +272,9 @@ Do NOT provide an Answer.
             elif isinstance(event, AgentOutput):
                 if event.response.content:
                     print(event.response.content)
+        response = await handler
+        debug("FINAL RESPONSE")
+        debug(response)
     except Exception as e:
         print(f"Error during workflow execution: {e}")
 
