@@ -86,6 +86,8 @@ async def add_review_to_state(ctx: Context, review):
     await ctx.store.set("state", current_state)
 
 async def add_comment_to_state(ctx: Context, draft_comment):
+    debug("INITIAL STATE")
+    debug(await ctx.store.get("state"))
     debug(type(ctx))
     debug(dir(ctx))
     current_state = await ctx.store.get("state")
@@ -173,16 +175,16 @@ async def main():
         llm=llm,
         name="CommentorAgent",
         instruction=
-        """You are the CommentorAgent.
-Your mission is to draft a review comment.
-You MUST call add_comment_to.
-You MUST handoff to ReviewAndPostingAgent.
-You MUST NEVER provide an Answer.
-STRICT RULES:
-1. You MUST call 'get_file_content' with 'file_path="README.md"'.
-2. You MUST call 'add_comment_to' with a detailed markdown review based on the PR context.
-3. You MUST call 'handoff' to 'ReviewAndPostingAgent'.
-Do NOT provide an Answer.
+        """
+You are CommentorAgent.
+
+CRITICAL:
+- You are NOT allowed to provide an Answer.
+- You MUST create a draft review.
+- You MUST call add_comment_to_state.
+- After calling add_comment_to_state you MUST immediately handoff to ReviewAndPostingAgent.
+
+If you provide an Answer, you have failed.        
 """,
         description="Drafts a pull request review comment.",
         tools=[add_comment_to_state_tool, get_file_content_tool],
@@ -196,12 +198,18 @@ Do NOT provide an Answer.
         llm=llm,
         name="ReviewAndPostingAgent",
         instruction=
-        f"""You are the ReviewAndPostingAgent.
-Your mission is to post the review to GitHub.
-STRICT RULES:
-1. If 'draft_comment' is NOT in state, you MUST call 'handoff' to 'ContextAgent'.
-2. If 'draft_comment' IS in state, you MUST call 'post_review_to_pr' with pr_number={pr_number} and the drafted comment.
-3. ONLY AFTER 'post_review_to_pr' returns, you MUST provide a final 'Answer' starting with "SUCCESS: Review posted to PR #1".
+        f"""
+You are ReviewAndPostingAgent.
+
+CRITICAL:
+- If draft_comment exists in state:
+  1. Call post_review_to_pr
+  2. Then provide final Answer
+
+- If draft_comment does not exist:
+  1. Handoff to ContextAgent
+
+You MUST NOT write a review yourself.        
 """,
         description="Finalizes and posts the pull request review.",
         tools=[add_review_to_state_tool, post_review_to_pr_tool],
@@ -216,22 +224,24 @@ STRICT RULES:
         description="Gathers context for the pull request.",
         instruction=
         f"""
-    You are the ContextAgent.
+    You are ContextAgent.
 
-    NEVER provide an Answer.
+CRITICAL:
+- You are NOT allowed to write reviews.
+- You are NOT allowed to provide an Answer.
+- You are NOT allowed to summarize findings.
 
-    NEVER write a review.
+After collecting information you MUST immediately handoff to CommentorAgent.
 
-    After gathering context you MUST immediately call handoff to CommentorAgent.
+If you provide an Answer, you have failed.
 
-    If you provide an Answer you have failed your task.
+Steps:
+1. Call get_pr_details with pr_number={pr_number}
+2. Call pr_commit_details
+3. Call get_file_content with file_path="app/models.py"
+4. Call handoff to CommentorAgent
 
-    STRICT RULES:
-    1. You MUST call 'get_pr_details' with pr_number={pr_number}.
-    2. You MUST call 'pr_commit_details' with the head_sha from the output of get_pr_details.
-    3. You MUST call 'get_file_content' with file_path="app/models.py".
-    4. You MUST call 'handoff' to 'CommentorAgent'.
-    Do NOT provide an Answer.
+Do nothing else.
     """,
         tools=[get_pr_details_tool, pr_commit_details_tool, get_file_content_tool],
         llm=llm,
