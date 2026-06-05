@@ -23,6 +23,12 @@ import sys
 import github.Auth
 
 dotenv.load_dotenv()
+
+DEBUG = os.getenv("DEBUG")
+
+def debug(*args):
+    if DEBUG:
+        print("[DEBUG]", *args)
 # Set logging level for llama_index to see if it helps reveal issues
 logging.getLogger("llama_index").setLevel(logging.DEBUG)
 
@@ -83,9 +89,14 @@ async def add_comment_to_state(ctx: Context, draft_comment):
     await ctx.set("state", current_state)
 
 def post_review_to_pr(pr_number: int, comment: str):
+    debug("POSTING REVIEW")
+    debug("PR =", pr_number)
+    debug("COMMENT =", comment[:500] if comment else "<EMPTY>")
     pull_request = repo.get_pull(pr_number)
     try:
         pull_request.create_review(body=comment, event="COMMENT")
+        debug("REVIEW CREATED")
+        debug("REVIEW ID =", getattr(result, "id", None))
     except Exception as e:
         if "one pending review" in str(e):
             # Try to find the pending review and submit it
