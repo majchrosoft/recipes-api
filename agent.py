@@ -140,7 +140,7 @@ mark_context_as_gathered_tool = FunctionTool.from_defaults(
 )
 
 async def main():
-    query = input().strip()
+    query = "Write a review for PR: " + pr_number
 
     commenter_agent = ReActAgent(
         llm=llm,
