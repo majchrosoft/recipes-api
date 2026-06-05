@@ -267,8 +267,8 @@ Only call tools.
         },
     )
     debug("AGENTS:")
-    for agent in orchestrator.agents:
-        debug(agent.name)
+    for agent_name in orchestrator.agents:
+        debug(agent_name)
 
     # 3. Run and Stream Events
     try:
