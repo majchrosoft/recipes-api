@@ -21,6 +21,7 @@ dependencies = [
     "coverage (>=7.8.0,<8.0.0)",
     "llama-index-core (>=0.14.22,<0.15.0)",
     "pygithub (>=2.9.1,<3.0.0)",
+    "llama-index-llms-openai-like (>=0.7.2,<0.8.0)",
 ]
 
 [build-system]
